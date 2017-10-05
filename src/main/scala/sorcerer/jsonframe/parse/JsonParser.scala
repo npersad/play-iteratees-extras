@@ -1,8 +1,6 @@
 package sorcerer.jsonframe.parse
 
-import spray.json._
-
-import spray.json._
+import spray.json._ 
 
 final class JsonParser(var buffer: String) extends Combinators {
   self =>
