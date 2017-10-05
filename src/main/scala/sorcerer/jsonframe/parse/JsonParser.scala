@@ -2,7 +2,10 @@ package sorcerer.jsonframe.parse
 
 import spray.json._
 
-final class JsonParser(var buffer: String) extends Combinators { self =>
+import spray.json._
+
+final class JsonParser(var buffer: String) extends Combinators {
+  self =>
 
   var savedBuffer = ""
 
@@ -11,7 +14,6 @@ final class JsonParser(var buffer: String) extends Combinators { self =>
       case ('[') | (',') =>
         for {
           _ <- drop(1)
-          _ <- skipWhitespace
           value <- frame
         } yield value
 
@@ -42,7 +44,11 @@ final class JsonParser(var buffer: String) extends Combinators { self =>
   /**
     * Creates a JSON array from a key value Function
     */
-  private def jsonArrayCreator(values: Iterable[JsValue]): JsArray = new JsArray(values.toVector)
+  private def jsonArrayCreator(values: Iterable[JsValue]): JsArray =
+    if (values.isEmpty)
+      JsArray.empty
+    else
+      new JsArray(values.toVector)
 
   //{ key : <object> } where <object> is possibly nested"
   private def jsonKeyValueImpl[A](valueHandler: (String => Option[(String, A)])) = for {
@@ -76,8 +82,8 @@ final class JsonParser(var buffer: String) extends Combinators { self =>
   private def jsonObject: Option[JsObject] = jsonObject()
 
   private def jsonObject[A, V](keyValuesHandler: (List[(String, JsValue)]) => JsObject = jsonObjectCreator,
-                       valueHandler: (String => Option[(String, JsValue)]) = (key: String) => _jsonValue.map((key,_))
-                      ): Option[JsObject] =
+                               valueHandler: (String => Option[(String, JsValue)]) = (key: String) => _jsonValue.map((key, _))
+                              ): Option[JsObject] =
     for {
       list <- jsonObjectImpl(keyValuesHandler, valueHandler)
     } yield keyValuesHandler(list)
@@ -97,12 +103,14 @@ final class JsonParser(var buffer: String) extends Combinators { self =>
 
   private def jsonValueForEach: Int => Option[JsValue] = index => _jsonValue
 
-  private def jsonArrayValues[A, V](valuesHandler: (List[JsValue] => JsArray),
-                            valueHandler: Int => Option[JsValue],
-                            index: Int = 0): Option[JsArray] =
+  private def jsonArray: Option[JsArray] = jsonArray()
+
+  private def jsonArray[A, V](valuesHandler: (List[JsValue] => JsArray) = jsonArrayCreator,
+                              valueHandler: (Int => Option[JsValue]) = jsonValueForEach
+                             ): Option[JsArray] =
     for {
-      listO <- jsonArrayValuesImpl(valuesHandler, valueHandler, index)
-    } yield valuesHandler(listO)
+      listO <- jsonArrayImpl(valuesHandler, valueHandler)
+    } yield jsonArrayCreator(listO)
 
   private def jsonArrayValuesImpl[A, V](valuesHandler: (List[JsValue] => JsArray),
                                         valueHandler: Int => Option[JsValue],
@@ -120,17 +128,6 @@ final class JsonParser(var buffer: String) extends Combinators { self =>
     _ <- skipWhitespace
   } yield values
 
-
-  private def jsonArray: Option[JsArray] = jsonArray()
-
-  private def jsonArray[A, V](valuesHandler: (List[JsValue] => JsArray) = jsonArrayCreator,
-                      valueHandler: (Int => Option[JsValue]) = jsonValueForEach
-                     ): Option[JsArray] =
-    for {
-      listO <- jsonArrayImpl(valuesHandler, valueHandler)
-    } yield jsonArrayCreator(listO)
-
-
   private def jsonArrayImpl[A, V](valuesHandler: (List[JsValue] => JsArray) = jsonArrayCreator,
                                   valueHandler: Int => Option[JsValue] = jsonValueForEach) = for {
     _ <- skipWhitespace
@@ -138,7 +135,8 @@ final class JsonParser(var buffer: String) extends Combinators { self =>
     _ <- skipWhitespace
     values <- peekOne match {
       case Some(']') =>
-        None
+        drop(1)
+        Option(Nil)
       case _ =>
         jsonArrayValuesImpl(valuesHandler, valueHandler)
     }
